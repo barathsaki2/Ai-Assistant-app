@@ -8,17 +8,19 @@ import org.springframework.security.web.SecurityFilterChain;
 @Configuration
 public class SecurityConfig {
 
-@Bean
-public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
-http
-.csrf(csrf -> csrf.disable())
-.authorizeHttpRequests(auth -> auth
-.anyRequest().permitAll()
-)
-.formLogin(form -> form.disable())
-.httpBasic(basic -> basic.disable());
+        http
+            .csrf(csrf -> csrf.disable())
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers(
+                    "/auth/**",
+                    "/chat/**"   // ✅ allow chat endpoints
+                ).permitAll()
+                .anyRequest().authenticated()
+            );
 
-return http.build();
-}
+        return http.build();
+    }
 }

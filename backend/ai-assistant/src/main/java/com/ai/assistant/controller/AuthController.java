@@ -6,6 +6,10 @@ import org.springframework.web.bind.annotation.*;
 import com.ai.assistant.entity.User;
 import com.ai.assistant.repository.UserRepository;
 import com.ai.assistant.service.AuthService;
+import com.ai.assistant.config.JwtUtil;
+
+import java.util.HashMap;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
@@ -14,8 +18,12 @@ public class AuthController {
 
  @Autowired
  AuthService service;
+
  @Autowired
-private UserRepository UserRepository;
+ private UserRepository userRepository;
+
+ @Autowired
+ private JwtUtil jwtUtil;
 
  @PostMapping("/register")
  public User register(@RequestBody User user){
@@ -23,12 +31,28 @@ private UserRepository UserRepository;
  }
 
  @PostMapping("/login")
- public User login(@RequestBody User user){
-  return service.login(user.getEmail(), user.getPassword());
- }
- @PutMapping("/update")
-public User updateUser(@RequestBody User user) {
-    return UserRepository.save(user);
-}
+ public Map<String,Object> login(@RequestBody User user){
 
+  User existing = service.login(user.getEmail(), user.getPassword());
+
+  Map<String,Object> response = new HashMap<>();
+
+  if(existing != null){
+
+   String token = jwtUtil.generateToken(existing.getEmail());
+
+   response.put("token", token);
+   response.put("user", existing);
+
+   return response;
+  }
+
+  response.put("error","Invalid credentials");
+  return response;
+ }
+
+ @PutMapping("/update")
+ public User updateUser(@RequestBody User user) {
+    return userRepository.save(user);
+ }
 }

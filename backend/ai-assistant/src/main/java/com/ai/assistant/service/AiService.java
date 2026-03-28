@@ -1,5 +1,7 @@
+
 // package com.ai.assistant.service;
 
+// import org.springframework.beans.factory.annotation.Value;
 // import org.springframework.http.*;
 // import org.springframework.stereotype.Service;
 // import org.springframework.web.client.RestTemplate;
@@ -9,7 +11,8 @@
 // @Service
 // public class AiService {
 
-//     private final String API_KEY = "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";
+//     @Value("${openrouter.api.key}")
+//     private String API_KEY;
 
 //     public String askAI(String question) {
 
@@ -27,6 +30,8 @@
 //             headers.add("X-Title", "AI Assistant");
 
 //             Map<String, Object> body = new HashMap<>();
+
+//             // ✅ FIXED MODEL
 //             body.put("model", "openrouter/auto");
 
 //             List<Map<String, String>> messages = new ArrayList<>();
@@ -57,8 +62,18 @@
 //             return "AI Error: " + e.getMessage();
 //         }
 //     }
-// }
 
+//     public String analyzeFile(String content) {
+
+//         if(content.length() > 8000){
+//             content = content.substring(0, 8000);
+//         }
+
+//         return askAI(
+//             "Analyze the following file and explain clearly:\n\n" + content
+//         );
+//     }
+// }
 
 package com.ai.assistant.service;
 
@@ -66,8 +81,18 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.*;
 import java.util.*;
+
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
+
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.apache.poi.xwpf.extractor.XWPFWordExtractor;
+
+import net.sourceforge.tess4j.Tesseract;
 
 @Service
 public class AiService {
@@ -75,6 +100,7 @@ public class AiService {
     @Value("${openrouter.api.key}")
     private String API_KEY;
 
+    // ================= AI CHAT =================
     public String askAI(String question) {
 
         try {
@@ -91,7 +117,7 @@ public class AiService {
             headers.add("X-Title", "AI Assistant");
 
             Map<String, Object> body = new HashMap<>();
-            body.put("model", "openai/gpt-4o-mini");
+            body.put("model", "openrouter/auto");
 
             List<Map<String, String>> messages = new ArrayList<>();
 
@@ -117,19 +143,94 @@ public class AiService {
             return msg.get("content").toString();
 
         } catch (Exception e) {
-            e.printStackTrace();
             return "AI Error: " + e.getMessage();
         }
     }
-       public String analyzeFile(String content) {
 
-    // limit size (VERY IMPORTANT)
-    if(content.length() > 8000){
-        content = content.substring(0, 8000);
+    // ================= FILE ANALYZE =================
+
+   public String analyzeFile(MultipartFile file) {
+
+    try {
+
+        String fileName = file.getOriginalFilename().toLowerCase();
+        String contentType = file.getContentType();
+
+        String text = "";
+
+        // ---------- PDF ----------
+        if (fileName.endsWith(".pdf")) {
+            text = extractPdf(file);
+        }
+
+        // ---------- WORD ----------
+        else if (fileName.endsWith(".docx")) {
+            text = extractWord(file);
+        }
+
+        // ---------- IMAGE ----------
+        else if (contentType != null && contentType.startsWith("image")) {
+            text = extractImage(file);
+        }
+
+        // ---------- TEXT ----------
+        else {
+            text = new String(file.getBytes());
+        }
+
+        if (text.length() > 8000) {
+            text = text.substring(0, 8000);
+        }
+
+        return askAI("Analyze this file:\n\n" + text);
+
+    } catch (Exception e) {
+        e.printStackTrace();
+        return "File Analyze Error: " + e.getMessage();
+    }
+}
+
+    // ================= PDF =================
+    private String extractPdf(MultipartFile file) throws Exception {
+
+        PDDocument document =
+                PDDocument.load(file.getInputStream());
+
+        PDFTextStripper stripper =
+                new PDFTextStripper();
+
+        String text = stripper.getText(document);
+
+        document.close();
+
+        return text;
     }
 
-    return askAI(
-        "Analyze the following file and explain clearly:\n\n" + content
-    );
+    // ================= WORD =================
+    private String extractWord(MultipartFile file) throws Exception {
+
+        XWPFDocument doc =
+                new XWPFDocument(file.getInputStream());
+
+        XWPFWordExtractor extractor =
+                new XWPFWordExtractor(doc);
+
+        return extractor.getText();
+    }
+
+    // ================= IMAGE OCR =================
+ private String extractImage(MultipartFile file) throws Exception {
+
+    File temp = File.createTempFile("upload", file.getOriginalFilename());
+    file.transferTo(temp);
+
+    Tesseract tesseract = new Tesseract();
+    tesseract.setDatapath("C:\\Program Files\\Tesseract-OCR\\tessdata");
+
+    String text = tesseract.doOCR(temp);
+
+    temp.delete();
+
+    return text;
 }
 }
